@@ -1,0 +1,28 @@
+name: Run My Bot
+on:
+  workflow_dispatch: # يسمح لك بتشغيله يدوياً
+  schedule:
+    - cron: '0 */6 * * *' # يشتغل تلقائياً كل 6 ساعات
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable tor
+          pip install selenium requests
+
+      - name: Start Tor and Run Bot
+        run: |
+          sudo service tor start
+          python bot_master2.py
