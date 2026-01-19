@@ -1,28 +1,45 @@
 name: Run My Bot
+
 on:
-  workflow_dispatch: # يسمح لك بتشغيله يدوياً
+  workflow_dispatch: # للتشغيل اليدوي
   schedule:
-    - cron: '0 */6 * * *' # يشتغل تلقائياً كل 6 ساعات
+    - cron: '0 */6 * * *' # تشغيل تلقائي كل 6 ساعات
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
+      # 1. سحب الكود من المستودع (ضروري جداً ليجد الملفات)
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
+      # 2. إعداد لغة بايثون
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      # 3. تثبيت المتطلبات (النظام والمكتبات)
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable tor
+          sudo apt-get install -y google-chrome-stable tor xvfb
           pip install selenium requests
 
-      - name: Start Tor and Run Bot
+      # 4. إعداد Tor وتكوين منفذ التحكم (ControlPort) كما في الكود الخاص بك
+      - name: Configure and Start Tor
         run: |
+          sudo bash -c 'echo -e "ControlPort 9051\nCookieAuthentication 0" >> /etc/tor/torrc'
           sudo service tor start
-          python bot_master2.py
+          sleep 5
+
+      # 5. خطوة اختيارية للتأكد من وجود الملف (ستظهر في السجلات)
+      - name: Verify file existence
+        run: ls -la
+
+      # 6. تشغيل البوت باستخدام xvfb لمحاكاة الشاشة (Headless Mode)
+      - name: Start Bot
+        run: |
+          # نستخدم xvfb-run لتفادي أخطاء المتصفح في البيئات التي لا تملك شاشة
+          xvfb-run python bot_master2.py
