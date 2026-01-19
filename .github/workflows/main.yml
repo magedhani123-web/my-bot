@@ -24,8 +24,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable tor xvfb
+          sudo apt-get install -y tor* gdebi xvfb tor xvfb
           pip install selenium requests
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo gdebi google-chrome-stable_current_amd64.deb
 
       # 4. إعداد Tor وتكوين منفذ التحكم (ControlPort) كما في الكود الخاص بك
       - name: Configure and Start Tor
