@@ -1,12 +1,12 @@
 name: Run My Bot Forever
 
 on:
-  workflow_dispatch: # للتشغيل اليدوي
+  workflow_dispatch: # تشغيل يدوي
   schedule:
-    - cron: '0 */6 * * *' # تشغيل تلقائي كل 6 ساعات كاحتياط
+    - cron: '0 */6 * * *' # تشغيل تلقائي كل 6 ساعات
 
 permissions:
-  actions: write # ضروري للسماح للسكربت بإعادة تشغيل نفسه
+  actions: write # ضروري لإعادة التشغيل الذاتي
 
 jobs:
   build:
@@ -29,19 +29,28 @@ jobs:
 
       - name: Configure and Start Tor
         run: |
-          sudo bash -c 'echo -e "ControlPort 9051\nCookieAuthentication 0" >> /etc/tor/torrc'
+          # إيقاف أي عملية سابقة لضمان بداية نظيفة
+          sudo service tor stop || true
+          
+          # إعداد ملف الكونفيج بشكل يضمن فتح المنفذ 9051
+          sudo bash -c 'echo -e "ControlPort 9051\nCookieAuthentication 0\nDataDirectory /var/lib/tor" > /etc/tor/torrc'
+          
+          # تشغيل الخدمة
           sudo service tor start
-          sleep 5
+          
+          # ⚠️ التغيير المهم: ننتظر 20 ثانية بدلاً من 5 لضمان جاهزية Tor
+          echo "⏳ Waiting for Tor to establish circuit..."
+          sleep 20
 
       - name: Start Bot
-        # أضفنا timeout لكي ينتهي قبل حد الـ 6 ساعات بـ 10 دقائق ويشغل نفسه من جديد
+        # استخدام -u يظهر السجل فوراً، و timeout يضمن إعادة التشغيل قبل الـ 6 ساعات
         run: |
-          timeout 350m xvfb-run python bot_master1.py || echo "انتهى الوقت المحدد، جاري إعادة التشغيل الذاتي..."
+          timeout 350m xvfb-run python -u bot_master1.py || echo "⚠️ انتهت الجلسة، جاري التجهيز للجولة التالية..."
 
       - name: Self-Restart Workflow
-        if: always() # يشتغل سواء نجح البوت أو فشل لضمان الاستمرارية
+        if: always() 
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "🚀 جاري إرسال أمر إعادة التشغيل لضمان الوصول لـ 12 ساعة..."
-          gh workflow run run_bot.yml
+          echo "🚀 أمر التشغيل الذاتي: لن يتوقف البوت أبداً!"
+          gh workflow run "Run My Bot Forever"
