@@ -1,4 +1,4 @@
-name: Run My Bot Forever
+name: Run My Bot Foreverش
 
 on:
   workflow_dispatch:
