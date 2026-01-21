@@ -1,47 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-IMPERIAL HYBRID VIEWER - FINAL EDITION
-Combines the stability of the 'Working Version' with the advanced features of 'Imperial Master'.
-"""
 
 import os
 import time
 import random
 import shutil
 import tempfile
-import subprocess
-import sys
 import socket
 import requests
-
-# محاولة استيراد Selenium
-try:
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.chrome.service import Service
-except ImportError:
-    print("📦 Installing selenium...")
-    os.system("pip install selenium requests > /dev/null 2>&1")
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-
-print("="*60)
-print("👑 IMPERIAL HYBRID VIEWER - FINAL EDITION")
-print("="*60)
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 
 # ==========================================
-# ⚙️ الإعدادات الإمبراطورية
+# ⚙️ الإعدادات الكبرى (تزييف شامل: معالج، رام، GPS، لغة، وقت)
 # ==========================================
+MAX_SESSIONS = 1000000 
 TOR_PROXY = "socks5://127.0.0.1:9050"
-CONTROL_PORT = 9051
+TOR_CONTROL_PORT = 9051
+MAX_WORKERS = 1 
 
-# قائمة الأجهزة (كما طلبت)
 DEVICES = [
-    {"name": "iPhone 16 Pro Max", "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", "plat": "iPhone", "w": 430, "h": 932, "mobile": True},
-    {"name": "Samsung Galaxy S24 Ultra", "ua": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36", "plat": "Linux armv8l", "w": 384, "h": 854, "mobile": True},
-    {"name": "Windows 11 PC", "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36", "plat": "Win32", "w": 1920, "h": 1080, "mobile": False},
-    {"name": "MacBook Pro", "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36", "plat": "MacIntel", "w": 1440, "h": 900, "mobile": False}
+    {"name": "iPhone 16 Pro Max", "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", "plat": "iPhone", "w": 430, "h": 932, "gpu": "Apple GPU"},
+    {"name": "iPhone 15 Pro", "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1", "plat": "iPhone", "w": 393, "h": 852, "gpu": "Apple GPU"},
+    {"name": "Samsung Galaxy S24 Ultra", "ua": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36", "plat": "Linux armv8l", "w": 384, "h": 854, "gpu": "Adreno 750"},
+    {"name": "Samsung Galaxy S23 Ultra", "ua": "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36", "plat": "Linux armv8l", "w": 360, "h": 800, "gpu": "Adreno 740"},
+    {"name": "Google Pixel 9 Pro", "ua": "Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro Build/AD1A.240530.019) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.103 Mobile Safari/537.36", "plat": "Linux aarch64", "w": 412, "h": 915, "gpu": "Mali-G715"},
+    {"name": "Huawei Mate 60 Pro", "ua": "Mozilla/5.0 (Linux; Android 12; ALN-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36", "plat": "Linux aarch64", "w": 412, "h": 915, "gpu": "Mali-G710"},
+    {"name": "Xiaomi 14 Ultra", "ua": "Mozilla/5.0 (Linux; Android 14; 24030PN60G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36", "plat": "Linux armv8l", "w": 393, "h": 873, "gpu": "Adreno 750"},
+    {"name": "Windows 11 PC", "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36", "plat": "Win32", "w": 1920, "h": 1080, "gpu": "NVIDIA RTX 4090"},
+    {"name": "MacBook Pro (macOS)", "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36", "plat": "MacIntel", "w": 1440, "h": 900, "gpu": "Apple M3"}
 ]
 
 VIDEOS_POOL = [
@@ -51,236 +42,152 @@ VIDEOS_POOL = [
     {"id": "AvH9Ig3A0Qo", "keywords": "Socotra treasure island"}
 ]
 
-# ==========================================
-# 🔍 فحص وتجهيز النظام (نفس السكربت الشغال)
-# ==========================================
-def setup_chrome_path():
-    print("🔍 Checking Chrome installation...")
-    # تنظيف العمليات السابقة
-    os.system("pkill -f chrome 2>/dev/null || true")
-    os.system("pkill -f chromedriver 2>/dev/null || true")
-    time.sleep(1)
-
-    chrome_path = "/usr/bin/google-chrome"
-    possible_paths = ["/usr/bin/google-chrome", "/usr/bin/chromium-browser", "/usr/bin/chrome", "/usr/bin/google-chrome-stable"]
-    
-    found = False
-    for path in possible_paths:
-        if os.path.exists(path):
-            chrome_path = path
-            found = True
-            print(f"✅ Found Chrome at: {chrome_path}")
-            break
-    
-    if not found:
-        print("❌ Chrome not found. Attempting install...")
-        os.system("sudo apt-get update && sudo apt-get install -y google-chrome-stable")
-        chrome_path = "/usr/bin/google-chrome"
-    
-    return chrome_path
-
-# ==========================================
-# 🌍 إدارة TOR NETWORK
-# ==========================================
-def rotate_ip():
-    """تغيير IP عبر Tor"""
-    print("🔄 Rotating IP address...")
+def renew_tor_ip():
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(5)
-            if s.connect_ex(("127.0.0.1", CONTROL_PORT)) == 0:
-                s.send(b'AUTHENTICATE ""\r\nSIGNAL NEWNYM\r\nQUIT\r\n')
-                time.sleep(3)
-                
-                # التحقق من IP
-                proxies = {'http': TOR_PROXY, 'https': TOR_PROXY}
-                try:
-                    info = requests.get('http://ip-api.com/json/', proxies=proxies, timeout=10).json()
-                    print(f"🌍 NEW IP: {info.get('query')} | 📍 {info.get('country')}")
-                except:
-                    print("⚠️ IP rotated but check timed out.")
-            else:
-                print("⚠️ Tor control port not open. Skipping rotation.")
-    except Exception as e:
-        print(f"⚠️ Tor rotation failed: {e}")
-
-# ==========================================
-# 📶 محاكاة سرعة الشبكة
-# ==========================================
-def set_network_speed(driver):
-    """تغيير سرعة النت عشوائياً"""
-    profiles = [
-        {"name": "5G", "down": 50000, "up": 20000, "lat": 20},
-        {"name": "4G", "down": 15000, "up": 7000, "lat": 50},
-        {"name": "WiFi", "down": 30000, "up": 15000, "lat": 30}
-    ]
-    profile = random.choice(profiles)
-    try:
-        driver.execute_cdp_cmd("Network.emulateNetworkConditions", {
-            "offline": False,
-            "latency": profile["lat"],
-            "downloadThroughput": profile["down"] * 1024,
-            "uploadThroughput": profile["up"] * 1024
-        })
-        print(f"📶 Network Speed: {profile['name']}")
-    except:
-        pass
-
-# ==========================================
-# 🛠️ إنشاء المتصفح (بالطريقة المضمونة)
-# ==========================================
-def create_browser(chrome_bin, device):
-    try:
-        profile_dir = tempfile.mkdtemp(prefix="imp_prof_")
-        
-        options = Options()
-        options.binary_location = chrome_bin
-        
-        # --- الإعدادات الأساسية من السكربت الشغال ---
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--headless=new')
-        options.add_argument('--mute-audio')
-        options.add_argument(f'--user-data-dir={profile_dir}')
-        
-        # --- التحسينات الإمبراطورية المضافة ---
-        options.add_argument(f'--proxy-server={TOR_PROXY}')
-        options.add_argument(f'--user-agent={device["ua"]}')
-        
-        # محاكاة الجوال
-        if device['mobile']:
-            mobile_emulation = {
-                "deviceMetrics": {"width": device['w'], "height": device['h'], "pixelRatio": 3.0},
-                "userAgent": device['ua']
-            }
-            options.add_experimental_option("mobileEmulation", mobile_emulation)
-        else:
-            options.add_argument(f'--window-size={device["w"]},{device["h"]}')
-
-        # خيارات التخفي وتقليل الموارد
-        options.add_argument('--disable-extensions')
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
-        
-        print(f"  🛠️ Creating Chrome for {device['name']}...")
-        
-        # استخدام Selenium العادي (الأكثر ثباتاً مع هذا المسار)
-        driver = webdriver.Chrome(options=options)
-        
-        # ضبط سرعة الشبكة
-        set_network_speed(driver)
-        
-        return driver, profile_dir
-
-    except Exception as e:
-        print(f"  ❌ Browser creation failed: {e}")
-        return None, None
-
-# ==========================================
-# 📺 تشغيل الفيديو (الإصدار المطور)
-# ==========================================
-def play_video(driver, video_id):
-    try:
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        print(f"  🌐 Loading: {url}")
-        driver.get(url)
-        time.sleep(5)
-        
-        # السكربت السحري للمشاهدة وتسريع 2x وتخطي الإعلانات
-        js_code = """
-        function imperialPlayer() {
-            try {
-                // 1. تشغيل الفيديو وتسريعه
-                var v = document.querySelector('video');
-                if(v) {
-                    v.muted = true;
-                    v.playbackRate = 2.0;
-                    if(v.paused) v.play();
-                }
-                
-                // 2. تخطي الإعلانات
-                var skip = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button');
-                if(skip) { skip.click(); console.log('Ad Skipped'); }
-                
-                // 3. إغلاق البنرات
-                var banner = document.querySelector('.ytp-ad-overlay-close-button');
-                if(banner) banner.click();
-                
-                return true;
-            } catch(e) { return false; }
-        }
-        return imperialPlayer();
-        """
-        
-        driver.execute_script(js_code)
-        
-        # حلقة للتأكد من استمرار التشغيل
-        watch_time = random.randint(120, 300)
-        print(f"  ⏱️ Watching for {watch_time}s (Speed 2x)...")
-        
-        start = time.time()
-        while time.time() - start < watch_time:
-            # إعادة تنفيذ السكربت كل 5 ثواني لضمان تخطي الإعلانات المستجدة
-            driver.execute_script(js_code)
-            
-            # محاكاة التفاعل (Scroll)
-            if random.random() < 0.2:
-                driver.execute_script(f"window.scrollBy(0, {random.randint(-50, 50)})")
-            
+        with socket.create_connection(("127.0.0.1", TOR_CONTROL_PORT)) as sig:
+            sig.send(b'AUTHENTICATE ""\r\nSIGNAL NEWNYM\r\n')
             time.sleep(5)
-            
-        print("  ✅ Session completed successfully")
-        return True
+    except: pass
 
-    except Exception as e:
-        print(f"  ❌ Playback error: {str(e)[:50]}")
-        return False
+def get_current_ip():
+    try:
+        proxies = {'http': TOR_PROXY, 'https': TOR_PROXY}
+        r = requests.get('https://api.ipify.org?format=json', proxies=proxies, timeout=15).json()
+        return r['ip']
+    except: return "Unknown"
 
-# ==========================================
-# 🚀 البرنامج الرئيسي
-# ==========================================
-def main():
-    chrome_bin = setup_chrome_path()
+def get_geo_data():
+    try:
+        proxies = {'http': TOR_PROXY, 'https': TOR_PROXY}
+        return requests.get('http://ip-api.com/json/', proxies=proxies, timeout=15).json()
+    except: return None
+
+def apply_stealth_js(driver, device, geo):
+    # 1. تزييف البطارية
+    batt_level = round(random.uniform(0.15, 0.98), 2)
+    is_charging = random.choice(["true", "false"])
     
-    # التأكد من تشغيل Tor
-    if os.system("pgrep -x tor > /dev/null") != 0:
-        print("⚠️ Warning: Tor service not running. Starting it...")
-        os.system("sudo service tor start")
-        time.sleep(3)
+    # 2. تزييف المعالج والرام (عشوائي)
+    cpu_cores = random.choice([2, 4, 6, 8, 12])
+    ram_gb = random.choice([4, 8, 12, 16, 32])
+    
+    # 3. بيانات الموقع الجغرافي والوقت واللغة بناءً على الـ IP
+    lang = geo['countryCode'].lower() if (geo and 'countryCode' in geo) else "en"
+    country = geo['countryCode'] if (geo and 'countryCode' in geo) else "US"
+    tz = geo['timezone'] if (geo and 'timezone' in geo) else "UTC"
+    lat = geo['lat'] if (geo and 'lat' in geo) else 0
+    lon = geo['lon'] if (geo and 'lon' in geo) else 0
 
-    session_count = 1
-    while True:
-        print(f"\n🎯 [Session {session_count}] Initiating...")
+    js_code = f"""
+    // تزييف الهاردوير (CPU & RAM)
+    Object.defineProperty(navigator, 'hardwareConcurrency', {{get: () => {cpu_cores}}});
+    Object.defineProperty(navigator, 'deviceMemory', {{get: () => {ram_gb}}});
+
+    // تزييف كرت الشاشة
+    const getParam = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(p) {{
+        if (p === 37445) return 'Google Inc. (NVIDIA)';
+        if (p === 37446) return '{device["gpu"]}';
+        return getParam.apply(this, arguments);
+    }};
+    
+    // تزييف البطارية
+    if (navigator.getBattery) {{
+        navigator.getBattery = () => Promise.resolve({{
+            charging: {is_charging}, level: {batt_level}, chargingTime: 0, dischargingTime: Infinity
+        }});
+    }}
+    
+    // تزييف اللغة والمنصة والوقت
+    Object.defineProperty(navigator, 'platform', {{get: () => '{device["plat"]}'}});
+    Object.defineProperty(navigator, 'language', {{get: () => '{lang}-{country}'}});
+    Object.defineProperty(navigator, 'languages', {{get: () => ['{lang}-{country}', '{lang}']}});
+    
+    // تزييف المنطقة الزمنية
+    Intl.DateTimeFormat = (function(old) {{
+        return function() {{
+            let res = old.apply(this, arguments);
+            res.resolvedOptions = () => ({{ timeZone: '{tz}' }});
+            return res;
+        }};
+    }})(Intl.DateTimeFormat);
+
+    // تزييف الـ GPS
+    navigator.geolocation.getCurrentPosition = (success) => {{
+        success({{ coords: {{ latitude: {lat}, longitude: {lon}, accuracy: 10 }} }});
+    }};
+
+    Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
+    """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": js_code})
+
+def run_session(session_num):
+    os.system("pkill -f chrome 2>/dev/null || true")
+    renew_tor_ip()
+    current_ip = get_current_ip()
+    geo = get_geo_data()
+    device = random.choice(DEVICES)
+    video = random.choice(VIDEOS_POOL)
+    
+    print(f"\n🚀 جلسة #{session_num} | IP: {current_ip} ({geo['country'] if geo else '??'})")
+    print(f"💻 جهاز: {device['name']} | معالج: {random.randint(4,8)} نوى | موقع: {geo['city'] if geo else '??'}")
+    
+    profile_dir = tempfile.mkdtemp(prefix="imp_final_")
+    options = uc.ChromeOptions()
+    options.add_argument(f'--user-data-dir={profile_dir}')
+    options.add_argument(f'--user-agent={device["ua"]}')
+    options.add_argument(f'--proxy-server={TOR_PROXY}')
+    options.add_argument(f"--window-size={device['w']},{device['h']}")
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--mute-audio')
+
+    try:
+        driver = uc.Chrome(options=options, use_subprocess=True)
+        apply_stealth_js(driver, device, geo)
+        wait = WebDriverWait(driver, 30)
+
+        driver.get("https://www.youtube.com")
+        time.sleep(random.randint(5, 8))
         
-        # 1. تدوير IP
-        rotate_ip()
+        try:
+            btns = driver.find_elements(By.XPATH, "//button[contains(.,'Accept') or contains(.,'Agree') or contains(.,'موافق')]")
+            if btns: btns[0].click()
+            search_box = wait.until(EC.element_to_be_clickable((By.NAME, "search_query")))
+            for char in video['keywords']:
+                search_box.send_keys(char)
+                time.sleep(random.uniform(0.1, 0.3))
+            search_box.send_keys(Keys.ENTER)
+            target_video = wait.until(EC.element_to_be_clickable((By.XPATH, f"//a[contains(@href, '{video['id']}')]")))
+            target_video.click()
+        except:
+            driver.get(f"https://www.youtube.com/watch?v={video['id']}")
+
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "video")))
+        driver.execute_script("document.querySelector('video').playbackRate = 1.0; document.querySelector('video').play();")
         
-        # 2. اختيار الجهاز والفيديو
-        device = random.choice(DEVICES)
-        video = random.choice(VIDEOS_POOL)
+        print(f"📺 مشاهدة الفيديو الأساسي...")
+        time.sleep(random.randint(110, 160))
+        driver.execute_script(f"window.scrollBy(0, {random.randint(300, 700)});")
         
-        # 3. تشغيل المتصفح
-        driver, profile = create_browser(chrome_bin, device)
-        
-        if driver:
-            # 4. تشغيل الفيديو
-            play_video(driver, video['id'])
-            
-            # 5. الإغلاق والتنظيف
-            try: driver.quit()
-            except: pass
-            shutil.rmtree(profile, ignore_errors=True)
-            print("  🧹 Cleanup done")
-        
-        session_count += 1
-        wait = random.randint(10, 20)
-        print(f"⏳ Cooldown: {wait}s...")
-        time.sleep(wait)
+        # فيديو عشوائي نهائي
+        try:
+            suggestions = driver.find_elements(By.CSS_SELECTOR, "a#thumbnail, a.ytd-thumbnail")
+            if suggestions:
+                random.choice(suggestions[:5]).click()
+                time.sleep(random.randint(15, 20))
+        except: pass
+
+        print(f"✅ اكتملت الجلسة بنجاح.")
+    except Exception as e:
+        print(f"❌ خطأ: {str(e)[:50]}")
+    finally:
+        driver.quit()
+        shutil.rmtree(profile_dir, ignore_errors=True)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n🛑 Stopped by King.")
+    for i in range(1, MAX_SESSIONS + 1):
+        run_session(i)
+        wait_gap = random.randint(15, 45)
+        print(f"⏳ انتظار {wait_gap} ثانية...")
+        time.sleep(wait_gap)
