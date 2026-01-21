@@ -79,7 +79,10 @@ def apply_stealth_js(driver, device, geo, cpu_cores, ram_gb, batt_level, is_char
     }};
     if (navigator.getBattery) {{
         navigator.getBattery = () => Promise.resolve({{
-            charging: {is_charging}, level: {batt_level}, chargingTime: 0, dischargingTime: Infinity
+            charging: {is_charging}, 
+            level: {batt_level}, 
+            chargingTime: {0 if is_charging == 'true' else 'Infinity'}, 
+            dischargingTime: { 'Infinity' if is_charging == 'true' else random.randint(3600, 10000)}
         }});
     }}
     Object.defineProperty(navigator, 'language', {{get: () => '{lang}-{lang.upper()}'}});
@@ -107,13 +110,19 @@ def run_session(session_num):
     device = random.choice(DEVICES)
     video = random.choice(VIDEOS_POOL)
     
-    # تحضير بيانات التزييف للطباعة والاستخدام
     cpu_cores = random.choice([2, 4, 6, 8, 12])
     ram_gb = random.choice([4, 8, 12, 16, 32])
-    batt_level_val = round(random.uniform(0.15, 0.98), 2)
-    is_charging_val = random.choice(["true", "false"])
     
-    # طباعة تفاصيل الجلسة كما طلبت
+    # تحسين منطق البطارية والشحن
+    batt_level_val = round(random.uniform(0.12, 0.99), 2)
+    # إذا كانت البطارية أقل من 20%، احتمال الشحن 80%، إذا كانت ممتلئة احتمال الشحن 10%
+    if batt_level_val < 0.20:
+        is_charging_val = random.choices(["true", "false"], weights=[80, 20])[0]
+    elif batt_level_val > 0.90:
+        is_charging_val = random.choices(["true", "false"], weights=[10, 90])[0]
+    else:
+        is_charging_val = random.choice(["true", "false"])
+
     print(f"\n🚀 جلسة #{session_num} | IP: {current_ip} ({geo['country'] if geo else 'Unknown'})")
     print(f"🎬 فيديو: https://www.youtube.com/watch?v={video['id']}")
     print(f"💻 جهاز: {device['name']} | لغة: {geo['countryCode'] if geo else '??'} | توقيت: {geo['timezone'] if geo else '??'}")
