@@ -1,19 +1,19 @@
 name: Run My Bot Forever
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # تشغيل يدوي
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *' # تشغيل تلقائي كاحتياط كل 6 ساعات
 
 permissions:
-  actions: write
+  actions: write # ضروري جداً لإعادة التشغيل الذاتي
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       PYTHONUNBUFFERED: "1"
-      # زيادة كفاءة الذاكرة للمعالج
+      # تخصيص ذاكرة أكبر للمعالجة
       NODE_OPTIONS: "--max-old-space-size=4096"
 
     steps:
@@ -27,8 +27,9 @@ jobs:
 
       - name: Maximize CPU Performance
         run: |
+          # تحسين أداء المعالج للسيرفر
           sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/&mitigations=off /' /etc/default/grub || true
-          echo "🚀 CPU Resources Optimized"
+          echo "🚀 CPU Optimized"
 
       - name: Install Google Chrome Stable
         run: |
@@ -39,7 +40,7 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          # تم الإبقاء على libasound2t64 لضمان التوافق
+          # تثبيت المكتبات الصوتية والرسومية المتوافقة مع الإصدار الجديد
           sudo apt-get install -y tor xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 ffmpeg
           pip install undetected_chromedriver selenium requests
 
@@ -48,15 +49,17 @@ jobs:
           sudo service tor stop || true
           sudo bash -c 'echo -e "ControlPort 9051\nCookieAuthentication 0\nDataDirectory /var/lib/tor" > /etc/tor/torrc'
           sudo service tor start
+          echo "⏳ Waiting for Tor..."
           sleep 20
 
-      - name: Start Bot (High Performance Mode)
+      - name: Start Bot (High Performance & GUI Fix)
         run: |
-          # إضافة --server-num لضمان عدم تداخل الجلسات وتوفير واجهة رسومية مستقرة
-          timeout 350m xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -ac +extension GLX +render -noreset" python -u bot_master1.py || echo "⚠️ Session ended"
+          # الحل النهائي لخطأ cannot connect to chrome عبر تهيئة DISPLAY وشاشة وهمية ثابتة
+          export DISPLAY=:99
+          timeout 350m xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -ac +extension GLX +render -noreset" python -u bot_master1.py || echo "⚠️ Session limit reached or ended"
 
       - name: Self-Restart Workflow
-        if: always()
+        if: always() # يضمن إعادة التشغيل حتى لو فشل البوت
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
