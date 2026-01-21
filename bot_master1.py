@@ -13,10 +13,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
 
 # ==========================================
-# ⚙️ الإعدادات الكبرى (تطابق كامل مع IP TOR + تزييف RAM/CPU)
+# ⚙️ الإعدادات (ثابتة تماماً كما طلبت)
 # ==========================================
 MAX_SESSIONS = 1000000 
 TOR_PROXY = "socks5://127.0.0.1:9050"
@@ -63,82 +62,72 @@ def get_geo_data():
     except: return None
 
 def apply_stealth_js(driver, device, geo):
-    # --- التعديلات المطلوبة ---
-    # 1. تزييف المعالج والرام عشوائياً
     cpu_cores = random.choice([2, 4, 6, 8, 12])
     ram_gb = random.choice([4, 8, 12, 16, 32])
-    
-    # 2. تزييف البطارية
     batt_level = round(random.uniform(0.15, 0.98), 2)
     is_charging = random.choice(["true", "false"])
-    
-    # 3. استخراج البيانات الجغرافية من TOR (لغة، توقيت، موقع)
     lang = geo['countryCode'].lower() if geo else "en"
     tz = geo['timezone'] if geo else "UTC"
     lat = geo['lat'] if geo else 0.0
     lon = geo['lon'] if geo else 0.0
     
     js_code = f"""
-    // تزييف المعالج والرام
     Object.defineProperty(navigator, 'hardwareConcurrency', {{get: () => {cpu_cores}}});
     Object.defineProperty(navigator, 'deviceMemory', {{get: () => {ram_gb}}});
-
-    // تزييف كرت الشاشة
     const getParam = WebGLRenderingContext.prototype.getParameter;
     WebGLRenderingContext.prototype.getParameter = function(p) {{
         if (p === 37445) return 'Google Inc. (NVIDIA)';
         if (p === 37446) return '{device["gpu"]}';
         return getParam.apply(this, arguments);
     }};
-    
-    // تزييف البطارية
     if (navigator.getBattery) {{
         navigator.getBattery = () => Promise.resolve({{
             charging: {is_charging}, level: {batt_level}, chargingTime: 0, dischargingTime: Infinity
         }});
     }}
-    
-    // تزييف الوقت واللغة والـ GPS بناءً على IP TOR
     Object.defineProperty(navigator, 'language', {{get: () => '{lang}-{lang.upper()}'}});
     Object.defineProperty(navigator, 'languages', {{get: () => ['{lang}-{lang.upper()}', '{lang}']}});
-    
     if (Intl) {{
         Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
             return {{ timeZone: '{tz}', calendar: 'gregory', numberingSystem: 'latn', locale: '{lang}-{lang.upper()}' }};
         }};
     }}
-
     navigator.geolocation.getCurrentPosition = (success) => success({{
         coords: {{ latitude: {lat}, longitude: {lon}, accuracy: 100 }}
     }});
-
     Object.defineProperty(navigator, 'platform', {{get: () => '{device["plat"]}'}});
     Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
     """
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": js_code})
 
 def run_session(session_num):
-    os.system("pkill -f chrome 2>/dev/null || true")
-    renew_tor_ip()
-    current_ip = get_current_ip()
-    geo = get_geo_data()
-    device = random.choice(DEVICES)
-    video = random.choice(VIDEOS_POOL)
-    
-    print(f"\n🚀 جلسة #{session_num} | IP: {current_ip} ({geo['country'] if geo else 'Unknown'})")
-    print(f"💻 جهاز: {device['name']} | لغة: {geo['countryCode'] if geo else '??'} | توقيت: {geo['timezone'] if geo else '??'}")
-    
+    driver = None # تعريف المتغير هنا لتجنب خطأ UnboundLocalError
     profile_dir = tempfile.mkdtemp(prefix="imp_final_")
-    options = uc.ChromeOptions()
-    options.add_argument(f'--user-data-dir={profile_dir}')
-    options.add_argument(f'--user-agent={device["ua"]}')
-    options.add_argument(f'--proxy-server={TOR_PROXY}')
-    options.add_argument(f"--window-size={device['w']},{device['h']}")
-    options.add_argument('--headless')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--mute-audio')
-
+    
     try:
+        os.system("pkill -f chrome 2>/dev/null || true")
+        renew_tor_ip()
+        current_ip = get_current_ip()
+        geo = get_geo_data()
+        device = random.choice(DEVICES)
+        video = random.choice(VIDEOS_POOL)
+        
+        print(f"\n🚀 جلسة #{session_num} | IP: {current_ip} ({geo['country'] if geo else 'Unknown'})")
+        
+        options = uc.ChromeOptions()
+        options.add_argument(f'--user-data-dir={profile_dir}')
+        options.add_argument(f'--user-agent={device["ua"]}')
+        options.add_argument(f'--proxy-server={TOR_PROXY}')
+        options.add_argument(f"--window-size={device['w']},{device['h']}")
+        
+        # إعدادات إضافية ضرورية لبيئة Linux و GitHub Actions
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--mute-audio')
+
+        # محاولة إنشاء المتصفح
         driver = uc.Chrome(options=options, use_subprocess=True)
         apply_stealth_js(driver, device, geo)
         wait = WebDriverWait(driver, 30)
@@ -160,15 +149,13 @@ def run_session(session_num):
             driver.get(f"https://www.youtube.com/watch?v={video['id']}")
 
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "video")))
-        
         driver.execute_script("document.querySelector('video').playbackRate = 1.0; document.querySelector('video').play();")
         
         time.sleep(random.randint(10, 20))
         driver.execute_script(f"window.scrollBy(0, {random.randint(300, 700)});")
+        time.sleep(random.randint(120, 180)) # مدة المشاهدة الأساسية
         
-        watch_duration = random.randint(120, 180)
-        time.sleep(watch_duration)
-        
+        # فيديو عشوائي نهائي
         try:
             suggestions = driver.find_elements(By.CSS_SELECTOR, "a#thumbnail, a.ytd-thumbnail")
             if suggestions:
@@ -176,11 +163,15 @@ def run_session(session_num):
                 time.sleep(random.randint(15, 20))
         except: pass
 
-        print(f"✅ اكتملت الجلسة بتطابق كامل للبيانات.")
+        print(f"✅ اكتملت الجلسة بنجاح.")
+
     except Exception as e:
-        print(f"❌ خطأ: {str(e)[:50]}")
+        print(f"❌ خطأ في الجلسة: {str(e)}")
     finally:
-        driver.quit()
+        if driver: # لا يتم الإغلاق إلا إذا كان المتصفح قد فُتح فعلياً
+            try:
+                driver.quit()
+            except: pass
         shutil.rmtree(profile_dir, ignore_errors=True)
 
 if __name__ == "__main__":
