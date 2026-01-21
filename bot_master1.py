@@ -16,7 +16,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
 # ==========================================
-# ⚙️ الإعدادات الكبرى (تزييف شامل: معالج، رام، GPS، لغة، وقت)
+# ⚙️ الإعدادات الكبرى (تطابق كامل مع IP TOR + تزييف RAM/CPU)
 # ==========================================
 MAX_SESSIONS = 1000000 
 TOR_PROXY = "socks5://127.0.0.1:9050"
@@ -63,23 +63,23 @@ def get_geo_data():
     except: return None
 
 def apply_stealth_js(driver, device, geo):
-    # 1. تزييف البطارية
-    batt_level = round(random.uniform(0.15, 0.98), 2)
-    is_charging = random.choice(["true", "false"])
-    
-    # 2. تزييف المعالج والرام (عشوائي)
+    # --- التعديلات المطلوبة ---
+    # 1. تزييف المعالج والرام عشوائياً
     cpu_cores = random.choice([2, 4, 6, 8, 12])
     ram_gb = random.choice([4, 8, 12, 16, 32])
     
-    # 3. بيانات الموقع الجغرافي والوقت واللغة بناءً على الـ IP
-    lang = geo['countryCode'].lower() if (geo and 'countryCode' in geo) else "en"
-    country = geo['countryCode'] if (geo and 'countryCode' in geo) else "US"
-    tz = geo['timezone'] if (geo and 'timezone' in geo) else "UTC"
-    lat = geo['lat'] if (geo and 'lat' in geo) else 0
-    lon = geo['lon'] if (geo and 'lon' in geo) else 0
-
+    # 2. تزييف البطارية
+    batt_level = round(random.uniform(0.15, 0.98), 2)
+    is_charging = random.choice(["true", "false"])
+    
+    # 3. استخراج البيانات الجغرافية من TOR (لغة، توقيت، موقع)
+    lang = geo['countryCode'].lower() if geo else "en"
+    tz = geo['timezone'] if geo else "UTC"
+    lat = geo['lat'] if geo else 0.0
+    lon = geo['lon'] if geo else 0.0
+    
     js_code = f"""
-    // تزييف الهاردوير (CPU & RAM)
+    // تزييف المعالج والرام
     Object.defineProperty(navigator, 'hardwareConcurrency', {{get: () => {cpu_cores}}});
     Object.defineProperty(navigator, 'deviceMemory', {{get: () => {ram_gb}}});
 
@@ -98,25 +98,21 @@ def apply_stealth_js(driver, device, geo):
         }});
     }}
     
-    // تزييف اللغة والمنصة والوقت
-    Object.defineProperty(navigator, 'platform', {{get: () => '{device["plat"]}'}});
-    Object.defineProperty(navigator, 'language', {{get: () => '{lang}-{country}'}});
-    Object.defineProperty(navigator, 'languages', {{get: () => ['{lang}-{country}', '{lang}']}});
+    // تزييف الوقت واللغة والـ GPS بناءً على IP TOR
+    Object.defineProperty(navigator, 'language', {{get: () => '{lang}-{lang.upper()}'}});
+    Object.defineProperty(navigator, 'languages', {{get: () => ['{lang}-{lang.upper()}', '{lang}']}});
     
-    // تزييف المنطقة الزمنية
-    Intl.DateTimeFormat = (function(old) {{
-        return function() {{
-            let res = old.apply(this, arguments);
-            res.resolvedOptions = () => ({{ timeZone: '{tz}' }});
-            return res;
+    if (Intl) {{
+        Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
+            return {{ timeZone: '{tz}', calendar: 'gregory', numberingSystem: 'latn', locale: '{lang}-{lang.upper()}' }};
         }};
-    }})(Intl.DateTimeFormat);
+    }}
 
-    // تزييف الـ GPS
-    navigator.geolocation.getCurrentPosition = (success) => {{
-        success({{ coords: {{ latitude: {lat}, longitude: {lon}, accuracy: 10 }} }});
-    }};
+    navigator.geolocation.getCurrentPosition = (success) => success({{
+        coords: {{ latitude: {lat}, longitude: {lon}, accuracy: 100 }}
+    }});
 
+    Object.defineProperty(navigator, 'platform', {{get: () => '{device["plat"]}'}});
     Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
     """
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": js_code})
@@ -129,8 +125,8 @@ def run_session(session_num):
     device = random.choice(DEVICES)
     video = random.choice(VIDEOS_POOL)
     
-    print(f"\n🚀 جلسة #{session_num} | IP: {current_ip} ({geo['country'] if geo else '??'})")
-    print(f"💻 جهاز: {device['name']} | معالج: {random.randint(4,8)} نوى | موقع: {geo['city'] if geo else '??'}")
+    print(f"\n🚀 جلسة #{session_num} | IP: {current_ip} ({geo['country'] if geo else 'Unknown'})")
+    print(f"💻 جهاز: {device['name']} | لغة: {geo['countryCode'] if geo else '??'} | توقيت: {geo['timezone'] if geo else '??'}")
     
     profile_dir = tempfile.mkdtemp(prefix="imp_final_")
     options = uc.ChromeOptions()
@@ -164,13 +160,15 @@ def run_session(session_num):
             driver.get(f"https://www.youtube.com/watch?v={video['id']}")
 
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "video")))
+        
         driver.execute_script("document.querySelector('video').playbackRate = 1.0; document.querySelector('video').play();")
         
-        print(f"📺 مشاهدة الفيديو الأساسي...")
-        time.sleep(random.randint(110, 160))
+        time.sleep(random.randint(10, 20))
         driver.execute_script(f"window.scrollBy(0, {random.randint(300, 700)});")
         
-        # فيديو عشوائي نهائي
+        watch_duration = random.randint(120, 180)
+        time.sleep(watch_duration)
+        
         try:
             suggestions = driver.find_elements(By.CSS_SELECTOR, "a#thumbnail, a.ytd-thumbnail")
             if suggestions:
@@ -178,7 +176,7 @@ def run_session(session_num):
                 time.sleep(random.randint(15, 20))
         except: pass
 
-        print(f"✅ اكتملت الجلسة بنجاح.")
+        print(f"✅ اكتملت الجلسة بتطابق كامل للبيانات.")
     except Exception as e:
         print(f"❌ خطأ: {str(e)[:50]}")
     finally:
